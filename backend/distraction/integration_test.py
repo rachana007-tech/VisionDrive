@@ -1,16 +1,20 @@
+import sys
+from pathlib import Path
+
+# Ensure project root is in sys.path when executed directly
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
+
 import cv2
 
 from backend.distraction import (
     HeadPoseDetector,
-    GazeDetector,
     DistractionDetector,
     PhoneDetector
 )
 
 
-# Initialize all four modules
+# Initialize modules
 head_detector = HeadPoseDetector()
-gaze_detector = GazeDetector()
 phone_detector = PhoneDetector()
 distraction_detector = DistractionDetector()
 
@@ -38,15 +42,12 @@ try:
         # 1. Head pose detection
         head_output = head_detector.process_frame(frame)
 
-        # 2. Gaze detection
-        gaze_output = gaze_detector.process_frame(frame)
-
-        # 3. Prolonged looking-away detection
+        # 2. Prolonged looking-away detection
         distraction_output = distraction_detector.update(
             head_output["head_direction"]
         )
 
-        # 4. Phone detection
+        # 3. Phone detection
         phone_output = phone_detector.process_frame(frame)
 
         # Display head direction
@@ -60,22 +61,11 @@ try:
             2
         )
 
-        # Display gaze direction
-        cv2.putText(
-            frame,
-            f"Gaze: {gaze_output['gaze_direction']}",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (255, 255, 0),
-            2
-        )
-
         # Display looking-away duration
         cv2.putText(
             frame,
             f"Away: {distraction_output['duration']} sec",
-            (20, 120),
+            (20, 80),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (0, 255, 255),
@@ -92,7 +82,7 @@ try:
         cv2.putText(
             frame,
             phone_status,
-            (20, 160),
+            (20, 120),
             cv2.FONT_HERSHEY_SIMPLEX,
             0.6,
             (0, 0, 255),
@@ -105,7 +95,7 @@ try:
             cv2.putText(
                 frame,
                 "PROLONGED LOOKING AWAY!",
-                (20, 200),
+                (20, 160),
                 cv2.FONT_HERSHEY_SIMPLEX,
                 0.7,
                 (0, 0, 255),
@@ -125,9 +115,7 @@ finally:
     cap.release()
 
     head_detector.close()
-    gaze_detector.close()
 
     cv2.destroyAllWindows()
 
     print("Integrated test stopped!")
-    
