@@ -12,7 +12,11 @@ class PhoneDetector:
     def __init__(self, confidence_threshold=0.25):
 
         # Load YOLO model only once
-        self.model = YOLO("yolo11n.pt")
+        from pathlib import Path
+
+        MODEL_PATH = Path(__file__).resolve().parent / "models" / "yolo11n.pt"
+
+        self.model = YOLO(str(MODEL_PATH))     
 
         self.confidence_threshold = confidence_threshold
 

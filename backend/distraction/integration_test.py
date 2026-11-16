@@ -1,121 +1,218 @@
+
 import sys
 from pathlib import Path
 
-# Ensure project root is in sys.path when executed directly
-sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-
 import cv2
 
-from backend.distraction import (
-    HeadPoseDetector,
-    DistractionDetector,
-    PhoneDetector
-)
+# Add VisionDrive project root to Python path
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(PROJECT_ROOT))
+
+# Import risk scoring
+from backend.risk_scoring import RiskScorer
 
 
-# Initialize modules
-head_detector = HeadPoseDetector()
-phone_detector = PhoneDetector()
-distraction_detector = DistractionDetector()
+# Import fatigue and distraction modules
+from backend.fatigue.fatigue_detector import FatigueDetector
+from backend.distraction import HeadPoseDetector, PhoneDetector
 
 
-# Open webcam
-cap = cv2.VideoCapture(0)
+def main():
 
-if not cap.isOpened():
-    print("Camera could not be opened!")
-    exit()
+    # Initialize all detection modules
+    print("Initializing VisionDrive detectors...")
 
+    fatigue_detector = FatigueDetector()
+    head_detector = HeadPoseDetector()
+    phone_detector = PhoneDetector()
+    risk_scorer = RiskScorer()
 
-print("VisionDrive - Integrated Distraction Test Started!")
-print("Press Q to exit.")
+    # Open one webcam
+    cap = cv2.VideoCapture(0)
 
-try:
+    if not cap.isOpened():
+        print("Camera could not be opened!")
 
-    while True:
+        fatigue_detector.close()
+        head_detector.close()
+        return
 
-        ret, frame = cap.read()
+    print("\nVisionDrive Integrated Monitoring Started!")
+    print("Press Q to stop the camera.\n")
 
-        if not ret:
-            break
+    try:
 
-        # 1. Head pose detection
-        head_output = head_detector.process_frame(frame)
+        while True:
 
-        # 2. Prolonged looking-away detection
-        distraction_output = distraction_detector.update(
-            head_output["head_direction"]
-        )
+            # Capture one frame
+            ret, frame = cap.read()
 
-        # 3. Phone detection
-        phone_output = phone_detector.process_frame(frame)
+            if not ret:
+                print("Unable to read camera frame.")
+                break
 
-        # Display head direction
-        cv2.putText(
-            frame,
-            f"Head: {head_output['head_direction']}",
-            (20, 40),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 0),
-            2
-        )
+            # -----------------------------------
+            # 1. FATIGUE DETECTION
+            # -----------------------------------
 
-        # Display looking-away duration
-        cv2.putText(
-            frame,
-            f"Away: {distraction_output['duration']} sec",
-            (20, 80),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 255, 255),
-            2
-        )
+            fatigue_output = fatigue_detector.process_frame(frame)
 
-        # Display phone status
-        phone_status = (
-            "Phone Detected"
-            if phone_output["phone_detected"]
-            else "No Phone"
-        )
+            # -----------------------------------
+            # 2. HEAD POSE DETECTION
+            # -----------------------------------
 
-        cv2.putText(
-            frame,
-            phone_status,
-            (20, 120),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 0, 255),
-            2
-        )
+            head_output = head_detector.process_frame(frame)
 
-        # Display prolonged distraction warning
-        if distraction_output["prolonged_looking_away"]:
+            # -----------------------------------
+            # 3. PHONE DETECTION
+            # -----------------------------------
+
+            phone_output = phone_detector.process_frame(frame)
+            risk_output = risk_scorer.process(
+            fatigue_output,
+            head_output,
+            phone_output
+            )
+
+            # -----------------------------------
+            # DISPLAY FATIGUE STATUS
+            # -----------------------------------
+
+            if fatigue_output["face_detected"]:
+                fatigue_status = fatigue_output["fatigue_level"]
+            else:
+                fatigue_status = "NOT ASSESSED"
 
             cv2.putText(
                 frame,
-                "PROLONGED LOOKING AWAY!",
-                (20, 160),
+                f"Fatigue: {fatigue_status}",
+                (20, 40),
                 cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 0, 255),
+                0.6,
+                (0, 255, 0),
                 2
             )
 
-        cv2.imshow(
-            "VisionDrive - Integrated Test",
-            frame
+            # -----------------------------------
+            # DISPLAY HEAD DIRECTION
+            # -----------------------------------
+
+            cv2.putText(
+                frame,
+                f"Head: {head_output['head_direction']}",
+                (20, 80),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (255, 255, 0),
+                2
+            )
+
+            # -----------------------------------
+            # DISPLAY LOOKING-AWAY DURATION
+            # -----------------------------------
+
+            cv2.putText(
+                frame,
+                f"Looking Away: {head_output['looking_away_duration']} sec",
+                (20, 120),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                (0, 255, 255),
+                2
+            )
+
+            # -----------------------------------
+            # DISPLAY PHONE DETECTION
+            # -----------------------------------
+
+            if phone_output["phone_detected"]:
+                phone_status = "PHONE DETECTED"
+                phone_color = (0, 0, 255)
+            else:
+                phone_status = "No Phone"
+                phone_color = (0, 255, 0)
+
+            cv2.putText(
+                frame,
+                phone_status,
+                (20, 160),
+                cv2.FONT_HERSHEY_SIMPLEX,
+                0.6,
+                phone_color,
+                2
+            )
+
+            # Display overall driver risk
+            risk_level = risk_output["overall_risk_level"]
+            risk_score = risk_output["overall_risk_score"]
+
+            if risk_score is None:
+              risk_text = "Overall Risk: NOT ASSESSED"
+              risk_color = (128, 128, 128)
+
+            else:
+              risk_text = f"Overall Risk: {risk_level} ({risk_score})"
+
+            if risk_level == "HIGH":
+              risk_color = (0, 0, 255)
+
+            elif risk_level == "MODERATE":
+               risk_color = (0, 165, 255)
+
+            else:
+               risk_color = (0, 255, 0)
+
+            cv2.putText(
+            frame,
+            risk_text,
+            (20, 240),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.7,
+            risk_color,
+            2
         )
 
-        if cv2.waitKey(1) & 0xFF == ord('q'):
-            break
+            # -----------------------------------
+            # DISPLAY DISTRACTION WARNING
+            # -----------------------------------
 
-finally:
+            if head_output["prolonged_looking_away"]:
 
-    cap.release()
+                cv2.putText(
+                    frame,
+                    "DISTRACTION WARNING!",
+                    (20, 200),
+                    cv2.FONT_HERSHEY_SIMPLEX,
+                    0.7,
+                    (0, 0, 255),
+                    2
+                )
 
-    head_detector.close()
+            # -----------------------------------
+            # DISPLAY THE CAMERA WINDOW
+            # -----------------------------------
 
-    cv2.destroyAllWindows()
+            cv2.imshow(
+                "VisionDrive - Integrated Driver Monitoring",
+                frame
+            )
 
-    print("Integrated test stopped!")
+            # Press Q to stop
+            if cv2.waitKey(1) & 0xFF == ord("q"):
+                break
+
+    finally:
+
+        # Release camera and detection resources
+        cap.release()
+
+        fatigue_detector.close()
+        head_detector.close()
+
+        cv2.destroyAllWindows()
+
+        print("\nVisionDrive monitoring stopped!")
+
+
+if __name__ == "__main__":
+    main()

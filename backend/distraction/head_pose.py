@@ -1,4 +1,4 @@
-
+import time
 import cv2
 import mediapipe as mp
 import numpy as np
@@ -78,15 +78,24 @@ class HeadPoseDetector:
 
     def __init__(self):
 
-        # Initialize MediaPipe only once
-        self.mp_face_mesh = mp.solutions.face_mesh
+        # Load MediaPipe Face Landmarker model
+        model_path = r"C:\VisionDriveModels\face_landmarker.task"
 
-        self.face_mesh = self.mp_face_mesh.FaceMesh(
-            max_num_faces=1,
-            refine_landmarks=True,
-            min_detection_confidence=0.5,
-            min_tracking_confidence=0.5
+        options = mp.tasks.vision.FaceLandmarkerOptions(
+            base_options=mp.tasks.BaseOptions(
+                model_asset_path=model_path
+            ),
+            running_mode=mp.tasks.vision.RunningMode.VIDEO,
+            num_faces=1
         )
+
+        self.landmarker = (
+            mp.tasks.vision.FaceLandmarker.create_from_options(options)
+        )
+
+        # Timestamp tracking for VIDEO mode
+        self.start_time = time.monotonic()
+        self.last_timestamp_ms = -1
 
         # 3D face reference points
         self.model_points = np.array([
@@ -101,7 +110,9 @@ class HeadPoseDetector:
         ], dtype=np.float64)
 
         # Initialize distraction components
-        self.distraction_detector = DistractionDetector(threshold=2.0)
+        self.distraction_detector = DistractionDetector(
+            threshold=2.0
+        )
 
         self.direction_smoother = DirectionSmoother(
             window_size=5,
@@ -116,12 +127,36 @@ class HeadPoseDetector:
 
         height, width, _ = frame.shape
 
+        # Generate increasing timestamp
+        current_time = time.monotonic()
+
+        timestamp_ms = int(
+            (current_time - self.start_time) * 1000
+        )
+
+        timestamp_ms = max(
+            timestamp_ms,
+            self.last_timestamp_ms + 1
+        )
+
+        self.last_timestamp_ms = timestamp_ms
+
+        # Convert BGR to RGB
         rgb_frame = cv2.cvtColor(
             frame,
             cv2.COLOR_BGR2RGB
         )
 
-        results = self.face_mesh.process(rgb_frame)
+        mp_image = mp.Image(
+            image_format=mp.ImageFormat.SRGB,
+            data=rgb_frame
+        )
+
+        # Detect face landmarks
+        results = self.landmarker.detect_for_video(
+            mp_image,
+            timestamp_ms
+        )
 
         # Default output
         output = {
@@ -138,14 +173,14 @@ class HeadPoseDetector:
         # 5. CHECK FACE
         # --------------------------------------------------
 
-        if not results.multi_face_landmarks:
+        if not results.face_landmarks:
 
             self.distraction_detector.update(None)
             self.direction_smoother.reset()
 
             return output
 
-        face_landmarks = results.multi_face_landmarks[0]
+        face_landmarks = results.face_landmarks[0]
 
         landmark_ids = [1, 152, 33, 263, 61, 291]
 
@@ -153,7 +188,7 @@ class HeadPoseDetector:
 
         for idx in landmark_ids:
 
-            landmark = face_landmarks.landmark[idx]
+            landmark = face_landmarks[idx]
 
             x = int(landmark.x * width)
             y = int(landmark.y * height)
@@ -195,13 +230,17 @@ class HeadPoseDetector:
         )
 
         if not success:
+
             self.distraction_detector.update(None)
             self.direction_smoother.reset()
+
             return output
 
         rotation_matrix, _ = cv2.Rodrigues(rotation_vector)
 
-        angles, _, _, _, _, _ = cv2.RQDecomp3x3(rotation_matrix)
+        angles, _, _, _, _, _ = cv2.RQDecomp3x3(
+            rotation_matrix
+        )
 
         pitch = float(angles[0])
         yaw = float(angles[1])
@@ -211,18 +250,25 @@ class HeadPoseDetector:
         # 8. CLASSIFY HEAD DIRECTION
         # --------------------------------------------------
 
-        raw_direction = get_head_direction(yaw, pitch)
+        raw_direction = get_head_direction(
+            yaw,
+            pitch
+        )
 
-        direction = self.direction_smoother.update(raw_direction)
+        direction = self.direction_smoother.update(
+            raw_direction
+        )
 
         # --------------------------------------------------
         # 9. CHECK PROLONGED DISTRACTION
         # --------------------------------------------------
 
-        distraction_result = self.distraction_detector.update(direction)
+        distraction_result = self.distraction_detector.update(
+            direction
+        )
 
         # --------------------------------------------------
-        # 10. RETURN RESULTS TO BACKEND
+        # 10. RETURN RESULTS
         # --------------------------------------------------
 
         output = {
@@ -232,7 +278,9 @@ class HeadPoseDetector:
             "roll": round(roll, 2),
             "head_direction": direction,
             "looking_away_duration": distraction_result["duration"],
-            "prolonged_looking_away": distraction_result["prolonged_looking_away"]
+            "prolonged_looking_away": distraction_result[
+                "prolonged_looking_away"
+            ]
         }
 
         return output
@@ -243,92 +291,4 @@ class HeadPoseDetector:
 
     def close(self):
 
-        self.face_mesh.close()
-
-
-# --------------------------------------------------
-# 12. STANDALONE TESTING
-# --------------------------------------------------
-
-if __name__ == "__main__":
-
-    detector = HeadPoseDetector()
-
-    cap = cv2.VideoCapture(0)
-
-    if not cap.isOpened():
-
-        print("Camera could not be opened!")
-        detector.close()
-        exit()
-
-    print("Head Pose Detection Started!")
-
-    try:
-
-        while True:
-
-            ret, frame = cap.read()
-
-            if not ret:
-                break
-
-            output = detector.process_frame(frame)
-
-            cv2.putText(
-                frame,
-                f"Direction: {output['head_direction']}",
-                (20, 40),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 255),
-                2
-            )
-
-            cv2.putText(
-                frame,
-                f"Yaw: {output['yaw']}",
-                (20, 80),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (0, 255, 0),
-                2
-            )
-
-            cv2.putText(
-                frame,
-                f"Looking Away: {output['looking_away_duration']} sec",
-                (20, 120),
-                cv2.FONT_HERSHEY_SIMPLEX,
-                0.7,
-                (255, 255, 0),
-                2
-            )
-
-            if output["prolonged_looking_away"]:
-
-                cv2.putText(
-                    frame,
-                    "PROLONGED LOOKING AWAY!",
-                    (20, 170),
-                    cv2.FONT_HERSHEY_SIMPLEX,
-                    0.7,
-                    (0, 0, 255),
-                    2
-                )
-
-            cv2.imshow(
-                "VisionDrive - Head Pose Detection",
-                frame
-            )
-
-            if cv2.waitKey(1) & 0xFF == ord('q'):
-                break
-
-    finally:
-
-        cap.release()
-        detector.close()
-        cv2.destroyAllWindows()
-
-        print("Head Pose Detection Stopped!")
+        self.landmarker.close()
