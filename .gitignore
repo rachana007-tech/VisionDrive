@@ -1,4 +1,9 @@
 venv/
+.venv/
 __pycache__/
 *.pyc
 yolo11n.pt
+node_modules/
+.env
+dist/
+build/
