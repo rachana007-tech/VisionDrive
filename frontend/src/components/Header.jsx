@@ -7,7 +7,9 @@ import {
   User, 
   ShieldAlert,
   RefreshCw,
-  Video
+  Video,
+  Volume2,
+  VolumeX
 } from 'lucide-react';
 
 export default function Header({ 
@@ -15,7 +17,11 @@ export default function Header({
   onRefresh, 
   isRefreshing, 
   onStartLive, 
-  isMonitoringActive 
+  isMonitoringActive,
+  isAudioMuted = false,
+  onToggleMute,
+  isAudioBlocked = false,
+  onEnableAudio
 }) {
   const [currentTime, setCurrentTime] = useState(new Date());
 
@@ -87,6 +93,35 @@ export default function Header({
             }} 
           />
         </button>
+
+        {/* Mute/Unmute Audio Warning Alert Button */}
+        <button
+          onClick={onToggleMute}
+          style={{
+            ...styles.refreshButton,
+            backgroundColor: isAudioMuted ? '#FEF2F2' : '#F8FAFC',
+            borderColor: isAudioMuted ? 'rgba(239, 68, 68, 0.3)' : 'var(--border-subtle)',
+          }}
+          title={isAudioMuted ? 'Warning sounds muted (Click to unmute)' : 'Warning sounds active (Click to mute)'}
+        >
+          {isAudioMuted ? (
+            <VolumeX size={16} color="#EF4444" />
+          ) : (
+            <Volume2 size={16} color="var(--royal-violet)" />
+          )}
+        </button>
+
+        {/* Browser Autoplay Blocked Notice Pill */}
+        {isAudioBlocked && !isAudioMuted && (
+          <button 
+            onClick={onEnableAudio}
+            style={styles.audioPromptPill}
+            title="Browser requires interaction to play audio. Click to enable."
+          >
+            <Volume2 size={13} color="#D97706" />
+            <span>Enable Sound</span>
+          </button>
+        )}
 
         {/* Backend Connection Status Pill */}
         <div 
@@ -212,6 +247,20 @@ const styles = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
+    transition: 'all 150ms ease'
+  },
+  audioPromptPill: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '6px',
+    backgroundColor: 'var(--status-moderate-bg)',
+    border: '1px solid rgba(245, 158, 11, 0.4)',
+    borderRadius: '8px',
+    padding: '7px 12px',
+    fontSize: '0.75rem',
+    fontWeight: '700',
+    color: '#B45309',
+    cursor: 'pointer',
     transition: 'all 150ms ease'
   },
   statusPill: {

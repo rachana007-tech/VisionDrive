@@ -223,6 +223,7 @@ export default function SettingsView({ backendHealth, onRefreshBackend }) {
                   <li>Live WebSocket frame streaming & HUD overlays</li>
                   <li>Real-time telemetry and risk score gauges</li>
                   <li>Historical session inspection & Recharts analytics</li>
+                  <li>High-risk audio warning alert with auto-cooldown</li>
                 </ul>
               </div>
             </div>

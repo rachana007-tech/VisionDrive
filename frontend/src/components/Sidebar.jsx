@@ -1,12 +1,12 @@
 import React from 'react';
-import { 
-  LayoutDashboard, 
-  Video, 
-  History, 
-  BarChart3, 
-  Bell, 
-  Settings, 
-  ShieldCheck, 
+import {
+  LayoutDashboard,
+  Video,
+  History,
+  BarChart3,
+  Bell,
+  Settings,
+  ShieldCheck,
   Activity,
   Cpu,
   Radio
@@ -59,11 +59,11 @@ export default function Sidebar({ currentTab, setCurrentTab, backendHealth, aler
               }}
             >
               <div style={styles.navButtonContent}>
-                <Icon 
-                  size={19} 
-                  color={isActive ? '#818CF8' : '#94A3B8'} 
+                <Icon
+                  size={19}
+                  color={isActive ? '#818CF8' : '#94A3B8'}
                 />
-                <span style={{ 
+                <span style={{
                   color: isActive ? '#FFFFFF' : '#CBD5E1',
                   fontWeight: isActive ? 600 : 500
                 }}>
@@ -99,9 +99,9 @@ export default function Sidebar({ currentTab, setCurrentTab, backendHealth, aler
         </div>
         <div style={styles.moduleRow}>
           <span style={styles.moduleName}>Backend Engine</span>
-          <span style={{ 
-            ...styles.moduleStatus, 
-            color: backendHealth?.isHealthy ? '#10B981' : '#F59E0B' 
+          <span style={{
+            ...styles.moduleStatus,
+            color: backendHealth?.isHealthy ? '#10B981' : '#F59E0B'
           }}>
             {backendHealth?.isHealthy ? 'Online' : 'Standby'}
           </span>

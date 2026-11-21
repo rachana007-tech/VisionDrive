@@ -73,7 +73,7 @@ class RiskScorer:
 
         overall_score = max(available_scores)
 
-        if overall_score >= 80:
+        if overall_score >= 90:
             risk_level = "HIGH"
 
         elif overall_score >= 40:

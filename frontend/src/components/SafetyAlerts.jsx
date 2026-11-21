@@ -1,13 +1,13 @@
 import React, { useState, useMemo } from 'react';
-import { 
-  Bell, 
-  AlertTriangle, 
-  Smartphone, 
-  Moon, 
-  EyeOff, 
-  Filter, 
-  Calendar, 
-  Clock, 
+import {
+  Bell,
+  AlertTriangle,
+  Smartphone,
+  Moon,
+  EyeOff,
+  Filter,
+  Calendar,
+  Clock,
   ShieldCheck,
   Search,
   CheckCircle2
@@ -88,8 +88,8 @@ export default function SafetyAlerts({ alerts = [], sessions = [], isLoading = f
           </div>
 
           {/* Session Filter */}
-          <select 
-            value={sessionFilter} 
+          <select
+            value={sessionFilter}
             onChange={(e) => setSessionFilter(e.target.value)}
             style={styles.select}
           >
@@ -102,8 +102,8 @@ export default function SafetyAlerts({ alerts = [], sessions = [], isLoading = f
           </select>
 
           {/* Severity Filter */}
-          <select 
-            value={severityFilter} 
+          <select
+            value={severityFilter}
             onChange={(e) => setSeverityFilter(e.target.value)}
             style={styles.select}
           >
@@ -113,8 +113,8 @@ export default function SafetyAlerts({ alerts = [], sessions = [], isLoading = f
           </select>
 
           {/* Alert Type Filter */}
-          <select 
-            value={typeFilter} 
+          <select
+            value={typeFilter}
             onChange={(e) => setTypeFilter(e.target.value)}
             style={styles.select}
           >
@@ -142,7 +142,7 @@ export default function SafetyAlerts({ alerts = [], sessions = [], isLoading = f
             </div>
             <h4 style={styles.emptyTitle}>No Safety Alerts Found</h4>
             <p style={styles.emptyDesc}>
-              {alerts.length === 0 
+              {alerts.length === 0
                 ? 'No alerts recorded in the database. Driver telemetry indicates clean driving habits.'
                 : 'No alerts match the selected filter criteria. Try resetting the filters.'}
             </p>
@@ -192,7 +192,7 @@ export default function SafetyAlerts({ alerts = [], sessions = [], isLoading = f
                         Session ID: <code style={styles.code}>{alert.session_id || '–'}</code>
                       </span>
                       {alert.session_id && onSelectSession && (
-                        <button 
+                        <button
                           onClick={() => onSelectSession(alert.session_id)}
                           style={styles.viewSessionBtn}
                         >

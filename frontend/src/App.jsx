@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import OverviewCards from './components/OverviewCards';
@@ -10,6 +10,7 @@ import SessionHistory from './components/SessionHistory';
 import AnalyticsView from './components/AnalyticsView';
 import SettingsView from './components/SettingsView';
 import api from './services/api';
+import audioAlert from './utils/audioAlert';
 
 class ErrorBoundary extends React.Component {
   constructor(props) {
@@ -51,6 +52,39 @@ export default function App() {
   const [selectedSessionId, setSelectedSessionId] = useState(null);
   const [isMonitoringActive, setIsMonitoringActive] = useState(false);
   const [liveTelemetry, setLiveTelemetry] = useState(null);
+
+  // Audio Warning State & Tracking
+  const [isAudioMuted, setIsAudioMuted] = useState(() => {
+    return localStorage.getItem('visiondrive_audio_muted') === 'true';
+  });
+  const [isAudioBlocked, setIsAudioBlocked] = useState(false);
+  const lastRiskWasHighRef = useRef(false);
+  const lastAlertTimeRef = useRef(0);
+
+  // Auto-unlock AudioContext on first user interaction
+  useEffect(() => {
+    audioAlert.attachUserGestureListeners(() => {
+      setIsAudioBlocked(false);
+    });
+  }, []);
+
+  const handleToggleMute = useCallback(() => {
+    setIsAudioMuted(prev => {
+      const next = !prev;
+      localStorage.setItem('visiondrive_audio_muted', String(next));
+      if (!next) {
+        audioAlert.resumeContext().then(resumed => {
+          setIsAudioBlocked(!resumed);
+        });
+      }
+      return next;
+    });
+  }, []);
+
+  const handleEnableAudio = useCallback(async () => {
+    const resumed = await audioAlert.resumeContext();
+    setIsAudioBlocked(!resumed);
+  }, []);
 
   // Fetch all initial data from backend
   const fetchData = useCallback(async (isSilent = false) => {
@@ -100,10 +134,62 @@ export default function App() {
     setAlerts(prev => [newAlert, ...prev]);
   }, []);
 
-  // Handle incoming live telemetry frames
+  // Handle incoming live telemetry frames & High-Risk Audio Warning
   const handleLiveTelemetry = useCallback((data) => {
     setLiveTelemetry(data);
-  }, []);
+
+    if (!data) return;
+
+    // Identify exact existing risk-level fields from backend (risk_scoring.py & main.py)
+    const riskLevel = String(data.risk?.overall_risk_level || '').toUpperCase();
+    const fatigueLevel = String(data.fatigue?.fatigue_level || '').toUpperCase();
+    const hasCriticalAlert = Array.isArray(data.alerts) && data.alerts.some(
+      a => String(a.severity || '').toLowerCase() === 'critical' || a.type === 'HIGH_RISK'
+    );
+
+    const isHighOrCritical = 
+      riskLevel === 'HIGH' || 
+      riskLevel === 'CRITICAL' || 
+      fatigueLevel === 'HIGH' || 
+      hasCriticalAlert;
+
+    const now = Date.now();
+    const COOLDOWN_MS = 6000; // 6-second cooldown between alerts while continuously high
+
+    if (isHighOrCritical) {
+      // 1. Initial transition from NORMAL/LOW/MODERATE into HIGH/CRITICAL
+      if (!lastRiskWasHighRef.current) {
+        lastRiskWasHighRef.current = true;
+        lastAlertTimeRef.current = now;
+
+        if (!isAudioMuted) {
+          audioAlert.playHighRiskWarning().then(success => {
+            if (!success && audioAlert.isBlocked) {
+              setIsAudioBlocked(true);
+            }
+          });
+        }
+      } 
+      // 2. Risk remains continuously HIGH — trigger reminder only after cooldown expires
+      else if (now - lastAlertTimeRef.current >= COOLDOWN_MS) {
+        lastAlertTimeRef.current = now;
+
+        if (!isAudioMuted) {
+          audioAlert.playHighRiskWarning().then(success => {
+            if (!success && audioAlert.isBlocked) {
+              setIsAudioBlocked(true);
+            }
+          });
+        }
+      }
+    } else {
+      // Risk returned to LOW, NORMAL, or MODERATE — reset the alert trigger
+      if (lastRiskWasHighRef.current) {
+        lastRiskWasHighRef.current = false;
+        lastAlertTimeRef.current = 0;
+      }
+    }
+  }, [isAudioMuted]);
 
   const latestSession = sessions.length > 0 ? sessions[0] : null;
 
@@ -130,6 +216,10 @@ export default function App() {
           isRefreshing={isRefreshing}
           onStartLive={() => setCurrentTab('live')}
           isMonitoringActive={isMonitoringActive}
+          isAudioMuted={isAudioMuted}
+          onToggleMute={handleToggleMute}
+          isAudioBlocked={isAudioBlocked}
+          onEnableAudio={handleEnableAudio}
         />
 
         {/* Dynamic Content Views */}
@@ -247,12 +337,12 @@ export default function App() {
             />
           )}
 
-          {currentTab === 'settings' && (
+          {/* {currentTab === 'settings' && (
             <SettingsView
               backendHealth={backendHealth}
               onRefreshBackend={() => fetchData(false)}
             />
-          )}
+          )} */}
         </main>
       </div>
     </div>
